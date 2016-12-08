@@ -46,9 +46,8 @@
 ;                       '<stdout>'  - File associated with standard output (MrStdOut)
 ;                       'stdout'    - File associated with standard error (MrStdErr)
 ;                       '<stdout>'  - File associated with standard error (MrStdErr)
-;                       'stdlog'    - Add an error message to the Standard log file (MrStdLog)
 ;                       'logwarn'   - Add an warning message to the Standard log file (MrStdLog)
-;                       'logout'    - Add text to the Standard log file (MrStdLog)
+;                       'logerr'    - Add an error message to the Standard log file (MrStdLog)
 ;                       'logtext'   - Add text to the Standard log file (MrStdLog)
 ;                   If one of the above is given, ARG2-20 are ignored.
 ;       ARG2-20:    in, optional, type=any
@@ -65,6 +64,10 @@
 ;                   Allows the format of the output to be specified in precise detail,
 ;                       using a FORTRAN-style specification. If is not specified,
 ;                       IDL uses its default rules for formatting the output.
+;       LEVEL:      in, required, type=integer, default=4
+;                   Level in the callstack at which to report the error. The default
+;                       is to report to the program that calls MrPrintF. Used only with
+;                       the 'logwarn' and 'logerr' options.
 ;       _REF_EXTRA: in, optional, type=any
 ;                   Any keyword accepted by IDL's String() function.
 ;
@@ -86,10 +89,12 @@
 ;                           message. - MRA
 ;       2016/06/11  -   PrintF is disabled in demo mode, so use Print for LUN of -1
 ;                           or -2 (stderr/stdout). Issue error otherwise. - MRA
+;       2016/10/06  -   Added the LEVEL keyword. - MRA
 ;-
 pro MrPrintF, lun,  arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
                    arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, $
 FORMAT=format, $
+LEVEL=level, $
 _REF_EXTRA=extra
 	compile_opt idl2
 	on_error, 2
@@ -195,27 +200,22 @@ _REF_EXTRA=extra
 			endif
 		endif
 		
+		;Level at which to report warning/error
+		if n_elements(level) eq 0 then level = 4
+		
 		;Pick the output method.
 		case strlowcase(lun) of
 			'stdout':   theLUN = MrStdOut()
 			'<stdout>': theLUN = MrStdOut()
 			'stderr':   theLUN = MrStdErr()
 			'<stderr>': theLUN = MrStdErr()
-			'stdlog': begin
-				oLog = MrStdLog()
-				oLog -> AddError, str
-			endcase
 			'logerr': begin
 				oLog = MrStdLog()
-				oLog -> AddError, str
+				oLog -> AddError, str, level
 			endcase
 			'logwarn': begin
 				oLog = MrStdLog()
-				oLog -> AddWarning, str
-			endcase
-			'logout': begin
-				oLog = MrStdLog()
-				oLog -> AddText, str, /ADD_CALLER
+				oLog -> AddWarning, str, level
 			endcase
 			'logtext': begin
 				oLog = MrStdLog()

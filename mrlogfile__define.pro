@@ -96,6 +96,8 @@
 ;       2015/12/04  -   Fixed problem with multi-line error messages. - MRA
 ;       2016/01/16  -   Allocate memory error does not have caller. Handled. - MRA
 ;       2016/06/11  -   Use Print in demo-mode when possible to by-pass error. - MRA
+;       2016/10/06  -   Added the LEVEL parameter to ::AddError and ::AddWarning.
+;                           ::Callstack no longer checks for sister program MrPrintF. - MRA
 ;-
 ;*****************************************************************************************
 ;+
@@ -109,8 +111,11 @@
 ;                    The error message text you wish to add to the file. If not provided,
 ;                        the text of the last error message (Help, /LAST_MESSAGE) is used and
 ;                        written to the file.
+;       LEVEL:       in, required, type=integer, default=3
+;                    Level in the callstack at which to report the error. The default
+;                        is to report to the program that calls ::AddError.
 ;-
-PRO MrLogFile::AddError, theText
+PRO MrLogFile::AddError, theText, level
 	compile_opt idl2
 	on_error, 2
 
@@ -125,7 +130,8 @@ PRO MrLogFile::AddError, theText
 	;   - ::Callstack will determine on which line ::AddError was called
 	;   - Add THETEXT to !Error_State by calling Message.
 	ENDIF ELSE BEGIN
-		traceback = self -> Callstack(3, CALLER=caller, LINE=line)
+		if n_elements(level) eq 0 then level = 3
+		traceback = self -> Callstack(level, CALLER=caller, LINE=line)
 		Message, theText, /CONTINUE, /NOPRINT, /NONAME, /NOPREFIX
 	ENDELSE
 	
@@ -270,16 +276,20 @@ END
 ; :Params:
 ;       THETEXT:     in, required, type=string
 ;                    Text to be written to the log file.
+;       LEVEL:       in, required, type=integer, default=3
+;                    Level in the callstack at which to report the error. The default
+;                        is to report to the program that calls ::AddWarning.
 ;-
-PRO MrLogFile::AddWarning, theText
+PRO MrLogFile::AddWarning, theText, level
 	Compile_Opt idl2
 	On_Error, 2
 
 	;Write strings to files
 	IF Size(theText, /TNAME) NE 'STRING' THEN Message, 'THETEXT must be a string.'
+	if n_elements(level) eq 0 then level = 3
 
 	; Get the call stack and the calling routine's name.
-	traceback = self -> Callstack(3, CALLER=caller, LINE=line)
+	traceback = self -> Callstack(level, CALLER=caller, LINE=line)
 
 	;Add the error
 	self -> AddText, 'Warning: ' + theText + ' (' + caller + ' ' + strtrim(line, 2) + ')'
@@ -442,9 +452,6 @@ LINE=line
 	endif else if lvl gt 0 && lvl lt nstack then begin
 		;Get the calling program
 		caller = stack[nstack-lvl].routine
-		
-		;Ignore sister program MrPrintF
-		if caller eq 'MRPRINTF' then lvl = lvl + 1
 		
 	;Level not allowed
 	endif else begin
