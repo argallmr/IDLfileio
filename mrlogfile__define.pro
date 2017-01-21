@@ -709,7 +709,7 @@ DELETE_CURRENT=delete_current
 	
 	;Default to standard error
 	newLog = N_Elements(newLogFile) EQ 0 ? '' : newLogFile
-	IF newLog EQ '' THEN newLog = 'stderr'
+	newLog = newLog EQ '' ? 'stderr' : StrLowCase(newLogFile)
 
 	; Can we write into the specified directory?
 	IF ~StRegEx(newLog, '^(std(out|err)|<std(out|err)>)$', /BOOLEAN) THEN BEGIN
