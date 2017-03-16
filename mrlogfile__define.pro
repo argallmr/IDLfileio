@@ -98,6 +98,7 @@
 ;       2016/06/11  -   Use Print in demo-mode when possible to by-pass error. - MRA
 ;       2016/10/06  -   Added the LEVEL parameter to ::AddError and ::AddWarning.
 ;                           ::Callstack no longer checks for sister program MrPrintF. - MRA
+;       2017/03/16  -   LEVEL is silently forced into acceptable range in ::CALLSTACK. - MRA
 ;-
 ;*****************************************************************************************
 ;+
@@ -436,27 +437,20 @@ LINE=line
 	compile_opt idl2
 	on_error, 2
 	
-	;Defaults
-	lvl = n_elements(level) eq 0 ? 1 : level
 	
 	; Get the call stack and the calling routine's name.
 	stack  = Scope_Traceback(/STRUCTURE)
 	nstack = n_elements(stack)
 	caller = stack[nstack-2].routine
-
-	;If there is only one element in the stack, then include MAIN
-	if nstack eq 1 then begin
-		lvl = 1
-		
-	;Otherwise, exclude it
-	endif else if lvl gt 0 && lvl lt nstack then begin
-		;Get the calling program
-		caller = stack[nstack-lvl].routine
-		
-	;Level not allowed
-	endif else begin
-		message, 'LEVEL > stack depth.'
-	endelse
+	
+	;Level at which to report
+	;   - MAIN is 1
+	;   - Maximum depth is NSTACK-1
+	lvl = n_elements(level) eq 0 ? 1 : level
+	lvl = 1 > lvl < nstack
+	
+	;Get calling routine
+	caller = stack[nstack-lvl].routine
 	
 	;Extract the stack elements
 	;   - Eliminate $MAIN$ if possible
