@@ -34,7 +34,7 @@
 ; PURPOSE:
 ;+
 ;   The purpose of this program is to log program errors or text messages during
-;   program execution as an aid to debugging such a program at a later date. The
+;   program execution as an aid to debugging said a program at a later date. The
 ;   MrLogFile program is written as an object so that it will persist in the IDL
 ;   session until it is destroyed.
 ;
@@ -78,7 +78,7 @@
 ;        PrintLastMessage: Writes the last message text written into the error log file to 
 ;                          standard output. (Procedure)
 ;
-;        Status:        Returns the current status of the error logger. (0 - waiting for input, 
+;        GetStatus:     Returns the current status of the error logger. (0 - waiting for input, 
 ;                       1 - normal operation, 2 - error operation.) (Function)
 ;
 ;        SetProperty:   Sets properties of the object. (Procedure)
@@ -99,6 +99,9 @@
 ;       2016/10/06  -   Added the LEVEL parameter to ::AddError and ::AddWarning.
 ;                           ::Callstack no longer checks for sister program MrPrintF. - MRA
 ;       2017/03/16  -   LEVEL is silently forced into acceptable range in ::CALLSTACK. - MRA
+;       2017/03/18  -   Added the APPEND keyword. Renamed ::Status to ::GetStatus. The
+;                           STATUS property can be a range of values and set via ::Add*.
+;                           Added the ::SetLun method. - MRA
 ;-
 ;*****************************************************************************************
 ;+
@@ -112,13 +115,22 @@
 ;                    The error message text you wish to add to the file. If not provided,
 ;                        the text of the last error message (Help, /LAST_MESSAGE) is used and
 ;                        written to the file.
-;       LEVEL:       in, required, type=integer, default=3
+;
+; :Keywords:
+;       LEVEL:       in, optional, type=integer, default=3
 ;                    Level in the callstack at which to report the error. The default
 ;                        is to report to the program that calls ::AddError.
+;       STATUS:      in, optional, type=byte, default=1
+;                    Set the error status.
 ;-
-PRO MrLogFile::AddError, theText, level
+PRO MrLogFile::AddError, theText, $
+LEVEL=level, $
+STATUS=status
 	compile_opt idl2
 	on_error, 2
+	
+	;Error status
+	theStatus = N_Elements(status) EQ 0 ? 1 : status
 
 	; If no text was given, assume an IDL error occurred
 	;   - ::Traceback will determine on which line and in which program
@@ -171,13 +183,14 @@ PRO MrLogFile::AddError, theText, level
 	endelse
 
 	;Add the error
-	self -> AddText, 'Error in ' + caller + ': ' + theText + ' (line ' + strtrim(line, 2) + ')'
+	self -> AddText, 'Error in ' + caller + ': ' + theText + ' (line ' + strtrim(line, 2) + ')', $
+	                 STATUS = status
 
 	;Add the traceback report
 	IF self.traceback THEN self -> AddText, '   ' + traceback
 
-	; Set the status to error condition.
-	self -> SetStatus, 2
+	; Set the error status
+	self -> SetStatus, theStatus
 END
 
 
@@ -196,10 +209,13 @@ END
 ;       PRINT:        in, optional, type=boolean, default=0
 ;                     If this keyword is set, the added text is also sent to standard
 ;                         output.
+;       STATUS:       in, optional, type=byte
+;                     Sets the error status. By default, the error status is left unchanged.
 ;-
 PRO MrLogFile::AddText, theText, $
+ADD_CALLER=add_caller, $
 PRINT=print, $
-ADD_CALLER=add_caller
+STATUS=status
 	Compile_Opt idl2
 	On_Error, 2
 
@@ -209,7 +225,7 @@ ADD_CALLER=add_caller
 	;Defaults
 	tf_print      = keyword_set(print)
 	tf_add_caller = keyword_set(add_caller)
-
+	
 	; Make sure these are strings we are writing.
 	thisType = Size(theText, /TNAME)
 	IF thisType NE 'STRING' THEN Message, 'Only strings can be written into the error log file.'
@@ -226,7 +242,6 @@ ADD_CALLER=add_caller
 		IF ~success THEN Message, 'Cannot successfully open the error log file.'
 	ENDIF
 	
-	
 	;
 	; In Demo mode, PrintF is not allowed and an error will be thrown.
 	; If it is, return here, set the demo-mode flag, and try again with
@@ -239,7 +254,7 @@ ADD_CALLER=add_caller
 	numLines = N_Elements(theText)
 	FOR j=0L, N_Elements(theText) -1 DO BEGIN
 		
-		;DEMO-MODE?
+		;DEMO-MODE
 		if tf_demo_mode then begin
 			catch, /CANCEL
 
@@ -251,18 +266,18 @@ ADD_CALLER=add_caller
 		;NORMAL-MODE
 		endif else begin
 			PrintF, self.lun, theText[j]
-			IF tf_print THEN Print, theText[ j ]
+			IF tf_print THEN Print, theText[j]
 		endelse
 	ENDFOR
 
 	; Write to disk immediately?
-	IF self.immediate NE 0 THEN self -> Flush
+	IF self.immediate THEN self -> Flush
 
 	; Update the error logger status to normal. If this method is called
 	; from AddError, then when we return to AddError, the status will be
 	; set to 2, or error status. But setting to 1 here allows us to add
 	; text to the file whenever we like.
-	self -> SetStatus, 1
+	self -> SetStatus, status
 
 	; Save the last message for later recall.
 	*self.lastMessage = theText
@@ -277,11 +292,17 @@ END
 ; :Params:
 ;       THETEXT:     in, required, type=string
 ;                    Text to be written to the log file.
-;       LEVEL:       in, required, type=integer, default=3
+;
+; :Keywords:
+;       LEVEL:       in, optional, type=integer, default=3
 ;                    Level in the callstack at which to report the error. The default
-;                        is to report to the program that calls ::AddWarning.
+;                        is to report to the program that calls ::AddError.
+;       STATUS:      in, optional, type=byte
+;                    Set the error status. The default is to leave the status unchanged.
 ;-
-PRO MrLogFile::AddWarning, theText, level
+PRO MrLogFile::AddWarning, theText, $
+LEVEL=level, $
+STATUS=status
 	Compile_Opt idl2
 	On_Error, 2
 
@@ -293,7 +314,8 @@ PRO MrLogFile::AddWarning, theText, level
 	traceback = self -> Callstack(level, CALLER=caller, LINE=line)
 
 	;Add the error
-	self -> AddText, 'Warning: ' + theText + ' (' + caller + ' ' + strtrim(line, 2) + ')'
+	self -> AddText, 'Warning: ' + theText + ' (' + caller + ' ' + strtrim(line, 2) + ')', $
+	                 STATUS=status
 
 	;Add the traceback report
 	IF self.warn_traceback THEN self -> AddText, '    ' + traceback
@@ -570,12 +592,12 @@ PRO MrLogFile::Close
 	;
 	; 100-128 are allocated by /GET_LUN and should be freed
 	; 1-99    are chosen by user and can simply be closed
-	; -2,-1   are standard error and output streams and should not be closed
+	; -2,-1,0 are standard error, output, and input streams and should not be closed
 	;
 	IF self.lun GE 100 $
 		THEN Free_Lun, self.lun $
 		ELSE IF self.lun GT 0 THEN Close, self.lun
-END 
+END
 
 
 ;+
@@ -653,6 +675,20 @@ END
 
 
 ;+
+;   Returns the current status of the error logger.
+;
+; :Returns:
+;       status:     The error log status::
+;                      0 - waiting for input
+;                      1 - normal operation
+;                      2 - error operation
+;-
+FUNCTION MrLogFile::GetStatus
+	RETURN, self.status
+END 
+
+
+;+
 ;   Returns the last text message written to the error logger.
 ;
 ; :Returns:
@@ -667,7 +703,7 @@ END
 
 
 ;+
-;   Opens the error log file.
+;   Opens the log file.
 ;
 ; :Params:
 ;       FILENAME:     in, optional, type=string, default='stderr'
@@ -677,24 +713,31 @@ END
 ;                         the previous log file is closed.
 ; 
 ; :Keywords:
-;       DELETE_CURRENT:  If this keyword is set, the current error log file is closed
-;                      and deleted before the new file is opened for writing.
+;       APPEND:         in, optional, type=boolean, default=0
+;                       If set, the file pointer will be moved to the end of the file.
+;                           The default is to clear the file and place the file pointer
+;                           at the beginning.
+;       DELETE_CURRENT: in, optional, type=boolean, default=0
+;                       If this keyword is set, the current error log file is closed
+;                           and deleted before the new file is opened for writing.
 ;
 ; :Returns:
-;       STATUS:       1 if file was opened sucessfully, 0 otherwise.
+;       STATUS:         out, required, type=integer
+;                       Returns 1 if file was opened sucessfully, 0 otherwise.
 ;-
 FUNCTION MrLogFile::Open, newLogFile, $
-DELETE_CURRENT=delete_current
+APPEND=append, $
+DELETE_CURRENT=delete_current, $
+_REF_EXTRA=extra
 	Compile_Opt idl2
-
 
 	; Error handling
 	Catch, theError
 	IF theError NE 0 THEN BEGIN
 		Catch, /CANCEL
 		Print, !Error_State.MSG
-		Print, '  ' + MrTraceback()
-		IF N_Elements(lun) NE 0 THEN BEGIN
+		Print, '  ' + Transpose(MrTraceback())
+		IF N_Elements(lun) NE 0 && lun GT 0 THEN BEGIN
 			Free_Lun, lun
 			File_Delete, newLogFilename, /ALLOW_NONEXISTENT
 		ENDIF
@@ -702,20 +745,30 @@ DELETE_CURRENT=delete_current
 	ENDIF
 	
 	;Default to standard error
-	newLog = N_Elements(newLogFile) EQ 0 ? '' : newLogFile
-	newLog = newLog EQ '' ? 'stderr' : StrLowCase(newLogFile)
-
-	; Can we write into the specified directory?
-	IF ~StRegEx(newLog, '^(std(out|err)|<std(out|err)>)$', /BOOLEAN) THEN BEGIN
+	;   - NEWLOGFILE might be the empty string, in which case choose stderr
+	newLog = N_Elements(newLogFile) EQ 0 ? 'stderr' : newLogFile
+	newLog = newLog EQ '' ? 'stderr' : newLogFile
+	
+	;Can we write into the specified directory?
+	IF ~StRegEx(newLog, '^(std(out|err)|<std(out|err)>)$', /FOLD_CASE, /BOOLEAN) THEN BEGIN
 		dir = file_dirname(newLog)
-		IF File_Test(dir, /DIRECTORY) EQ 0 THEN Message, 'Directory does not exist: "' + '".' 
+		IF File_Test(dir, /DIRECTORY, /WRITE) EQ 0 $
+			THEN Message, 'Directory does not exist or is not writable: "' + dir + '".' 
 	ENDIF
+
+;-----------------------------------------------------
+; Previous Log File \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 
 	; Close the current file (if any) before opening a new one.
 	self -> Close
 
 	; Need to delete the current file?
 	IF Keyword_Set(delete_current) THEN File_Delete, self.filename, /ALLOW_NONEXISTENT
+
+;-----------------------------------------------------
+; Filename Given \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 
 	; Open the file for writing.
 	;    FSTAT(-1) returns "<stdout>" and "<stderr>"
@@ -726,16 +779,20 @@ DELETE_CURRENT=delete_current
 		'stderr':   lun = -2
 		ELSE: BEGIN
 			;Open the file
-			OpenW, lun, newLog, /GET_LUN
+			OpenW, lun, newLog, $
+			       APPEND = append, $
+			       /GET_LUN
 
 			; Write a header into the file.
-			PrintF, lun, 'Error log file created: ' + SysTime(/UTC) + ' UTC'
-			PrintF, lun, ""
+			IF ~Keyword_Set(append) THEN BEGIN
+				PrintF, lun, 'Error log file created: ' + SysTime(/UTC) + ' UTC'
+				PrintF, lun, ""
+			ENDIF
 		ENDCASE
 	ENDCASE
-	self.lun = lun
 
 	; Store the filename
+	self.lun      = lun
 	self.filename = newLog
 
 	RETURN, 1
@@ -779,6 +836,7 @@ END
 PRO MrLogFile::SetProperty, $
 ADD_FILES=add_files, $
 ALERT=alert, $
+APPEND=append, $
 DELETE=delete, $
 NOCLUTTER=noclutter, $
 NOTRACEBACK=notraceback, $
@@ -789,6 +847,7 @@ WARN_TRACEBACK=warn_traceback
 	;Set Properties
 	IF N_Elements(add_files)      NE 0 THEN self.add_files      =  Keyword_Set(add_files)
 	IF N_Elements(alert)          NE 0 THEN self.alert          =  Keyword_Set(alert)
+	IF N_Elements(append)         NE 0 THEN self.append         =  Keyword_Set(append)
 	IF N_Elements(delete)         NE 0 THEN self.delete         =  Keyword_Set(delete)
 	IF N_Elements(notraceback)    NE 0 THEN self.traceback      = ~Keyword_Set(notraceback)
 	IF N_Elements(warn_traceback) NE 0 THEN self.warn_traceback =  Keyword_Set(warn_traceback)
@@ -806,36 +865,56 @@ END
 
 
 ;+
+;   Set the logical unit number of the log file.
+;
+; :Params:
+;       LUN:                in, required, type=integer
+;                           The logical unit number of an open file.
+;
+; :Keywords:
+;       DELETE_CURRENT:     in, optional, type=boolean, default=0
+;                           If set, the current log file is deleted.
+;-
+PRO MrLogFile::SetLUN, lun, $
+DELETE_CURRENT=delete_current
+	Compile_Opt idl2
+	
+	Catch, the_error
+	IF the_error NE 0 THEN BEGIN
+		Catch, /CANCEL
+		Print, !Error_State.msg
+		Print, '  ' + Transpose(MrTraceback())
+		RETURN
+	ENDIF
+	
+	;The LUN must be open
+	finfo = FStat(lun)
+	IF ~finfo.open THEN Message, 'LUN must be open.'
+	
+	;Close the current file
+	self -> Close
+	
+	;Delete the current file
+	IF Keyword_Set(delete_current) THEN File_Delete, self.filename, /ALLOW_NONEXISTENT
+	
+	;Set the LUN and filename
+	self.filename = finfo.name
+	self.lun      = finfo.unit
+END
+
+
+;+
 ;   Sets the current status of the error logger.
 ;
 ; :Params:
 ;       status:     in, required, type=integer
 ;                   The error log status::
-;                      0 - waiting for input
-;                      1 - normal operation
-;                      2 - error operation
+;                      0     - No error
+;                      1-255 - error
 ;-
 PRO MrLogFile::SetStatus, status
-	IF N_Elements(status) NE 0 THEN BEGIN
-		IF (self.noclutter AND (status EQ 2)) $
-			THEN self.status = 1 $
-			ELSE self.status = 0 > status < 2
-	ENDIF
-END 
-
-
-;+
-;   Returns the current status of the error logger.
-;
-; :Returns:
-;       status:     The error log status::
-;                      0 - waiting for input
-;                      1 - normal operation
-;                      2 - error operation
-;-
-FUNCTION MrLogFile::Status
-	RETURN, self.status
-END 
+	IF N_Elements(status) GT 0 THEN self.status = 0 > status < 255
+END
 
 
 ;+
@@ -850,8 +929,9 @@ PRO MrLogFile::CLEANUP
 
 	; If the file is not in an error state, and the delete_on_destroy flag
 	; is set, delete the error log file.
-	IF self.delete THEN BEGIN
-		IF self.status NE 2 THEN File_Delete, self.filename, /ALLOW_NONEXISTENT
+	IF self.delete THEN File_Delete, self.filename, /ALLOW_NONEXISTENT
+	IF self.noclutter THEN BEGIN
+		IF self.status LE 0 THEN File_Delete, self.filename, /ALLOW_NONEXISTENT
 	ENDIF
 
 	; Free the last message pointer.
@@ -865,8 +945,9 @@ END
 ;
 ; :Params:
 ;       FILENAME:       in, optional, type=string/int, default='MrLogFile_[date]_[random-numbers].log'
-;                       The name of the error log file. If not provided, a default name
-;                           will be created based on the current system time. (Optional)
+;                       The name or logical unit number (lun) of the error log file. If
+;                           not provided, a default name will be created based on the
+;                           current system time.
 ;
 ; :Keywords:
 ;      ADD_FILES:       in, optional, type=boolean, default=0
@@ -878,20 +959,13 @@ END
 ;                           the user via a message dialog that an error has occurred when
 ;                           using the AddError method. Default is 0. (Input)
 ;      DELETE:          in, optional, type=boolean, default=0
-;                       If this keyword is set, the error log file will be deleted when the
-;                           MrLogFile object is destroyed, but only if the MrLogFile
-;                           object is not in an error state at that time (error status = 2).
+;                       If set, the log file will be deleted when the MrLogFile object
+;                           is destroyed.
 ;      IMMEDIATE:       in, optional, type=boolean, default=1
 ;                       All messages will flush to disk as soon as they are logged.
 ;      NOCLUTTER:       in, optional, type=boolean, defualt=0
-;                       Believe it or not, some people who use an MrLogFile prefer that
-;                           an error log file is never left behind. (They prefer that the
-;                           program act like cgErrorMsg.) For those people, the NOCLUTTER
-;                           keyword provides a way for them to automatically set the `ALERT`
-;                           and `DELETE` keywords to 1. It also prevents the error  logger
-;                           from ever setting the error status to 2. Thus, when the
-;                           MrLogFile is destroyed, the file is always deleted. When set,
-;                           overrides `ALERT` and `DELETE` settings.
+;                       If set, then the log file will be delete when the MrLogFile object
+;                           is destroyed, but only if no error has occurred (status=0).
 ;      NOTRACEBACK:     in, optional, type=boolean, default=0
 ;                       Set this keyword to suppress traceback information in the error log
 ;                           output and in any alerts issued by the program.
@@ -904,110 +978,139 @@ END
 ;                       If set, traceback reports will be added to the warning messages.
 ;                           All warning messages always contain the caller and line
 ;                           number where the warning occurred.
+;      _REF_EXTRA:      in, optional, type=any
+;                       Any keyword accepted by MrLogFile::Open is also accepted here.
+;                           This keyword is ignored unless `FILE` is a file name.
 ;-
 FUNCTION MrLogFile::INIT, file, $
 ADD_FILES=add_files, $
 ALERT=alert, $
+APPEND=append, $
 DELETE=delete, $
 IMMEDIATE = immediate, $
 NOCLUTTER=noclutter, $
 NOTRACEBACK=notraceback, $
 TIMESTAMP=timestamp, $
-WARN_TRACEBACK=warn_traceback
+WARN_TRACEBACK=warn_traceback, $
+_REF_EXTRA=extra
 	COMPILE_OPT idl2
-
+	
 	Catch, theError
 	IF theError NE 0 THEN BEGIN
 		Catch, /CANCEL
-		MrPrintF, 'LogErr'
-		IF N_Elements(lun) NE 0 THEN BEGIN
-			Free_Lun, lun
-			File_Delete, logFilename, /ALLOW_NONEXISTENT
-		ENDIF
+		Print, !Error_State.msg
+		Print, '  ' + Transpose(MrTraceback())
 		RETURN, 0
 	ENDIF
+	
+	;Time stamp (UTC)
+	;   - <date>_<6 random digits>
+	;   - Leave SEED undefined to minimize chances that the random digits are the same
+	tstamp = StrLowCase(IDL_ValidName(SysTime(/UTC), /CONVERT_ALL)) + '_' + $
+	         StrTrim(Fix(randomu(seed, 1) * 1e6, TYPE=3), 2)
 
-	; Does the filename exist?
+;-----------------------------------------------------
+; No File Given \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 	IF N_Elements(file) EQ 0 THEN BEGIN
+		;Create a file name
 		CD, CURRENT=currentDir
-		filename = FilePath(ROOT_DIR=currentDir, 'logger' + $
-		                    cgTimestamp(RANDOM_DIGITS=6, /VALID) + '.log')
-		timestamp = 0
+		filename  = FilePath( 'MrLogFile_' + tstamp + '.log', $
+		                      ROOT_DIR=currentDir )
 		
-	; Filename
-	ENDIF ELSE IF Size(file, /TNAME) EQ 'STRING' THEN BEGIN
-		filename = file eq '' ? 'stderr' : file
-		CASE filename OF
-			'<stdout>': fileID = -1
-			'stdout':   fileID = -1
-			'<stderr>': fileID = -2
-			'stderr':   fileID = -2
-			ELSE:       fileID =  0
-		ENDCASE
+		;Open the file
+		status = self -> Open( filename, $
+		                       APPEND        = append, $
+		                       _STRICT_EXTRA = extra)
+		IF status EQ 0 THEN RETURN, 0
 
+;-----------------------------------------------------
+; File Name Given \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
+	ENDIF ELSE IF Size(file, /TNAME) EQ 'STRING' THEN BEGIN
+		filename = file
+		
 		;Fully qualify & add time stamp
-		IF ~stregex(filename, '^(std(out|err)|<std(out|err)>)$', /FOLD_CASE, /BOOLEAN) THEN BEGIN
+		IF ~StRegEx(filename, '^(std(out|err)|<std(out|err)>)$', /FOLD_CASE, /BOOLEAN) THEN BEGIN
 			; Is this a fully qualified filename?
 			baseName = File_BaseName(filename)
 			IF baseName EQ filename THEN BEGIN
 				CD, CURRENT=currentDir
-				filename = FilePath(ROOT_DIR=currentDir, filename)
+				filename = FilePath(ROOT_DIR=currentDir, file)
 			ENDIF
 
 			; Does the name need a time stamp?
 			IF Keyword_Set(timestamp) THEN BEGIN
-				basename     = cgRootName(filename, EXTENSION=ext, DIRECTORY=dir)
-				time         = Systime(1)
-				randomdigits =  StrMid(StrTrim(time - Long(time),2), 2)
-				filename     = Filepath(ROOT_DIR=dir, basename +  cgTimestamp(RANDOM_DIGITS=6, /VALID))
-				IF ext NE "" THEN filename = filename + '.' + ext
+				;Directory and base names
+				dir      = File_DirName(filename)
+				basename = File_BaseName(filename)
+				
+				;Remove extension
+				iExt     = StrPos(basename, '.', /REVERSE_SEARCH)
+				ext      = iExt EQ -1 ? ''       : StrMid(basename, iExt+1)
+				basename = iExt EQ -1 ? basename : StrMid(basename, 0, iExt)
+				
+				;Add time stamp
+				filename = Filepath(ROOT_DIR=dir, basename + '_' + tstamp)
+				IF ext NE '' THEN filename = filename + '.' + ext
 			END
 		ENDIF
-	
-	;File ID
+		
+		;Open the file
+		status = self -> Open( filename, $
+		                       APPEND        = append, $
+		                       _STRICT_EXTRA = extra)
+		IF status EQ 0 THEN RETURN, 0
+
+;-----------------------------------------------------
+; LUN Given \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 	ENDIF ELSE BEGIN
-		IF file EQ 0 || file LT -2 || file GT 128 $
-			THEN Message, 'Invalid fileID.'
-			
-		fileID   = file
-		filename = FStat(fileID)
-		filename = filename.name
+		;Set the logical unit number
+		self -> SetLUN, file
 	ENDELSE
+
+;-----------------------------------------------------
+; Set Properties \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 
 	; Initialize the last message pointer.
 	self.lastMessage = Ptr_New(/ALLOCATE_HEAP)
 
 	; Set properties.
-	self.filename       = filename
+	tf_noclutter = Keyword_Set(noclutter)
+	tf_delete    = Keyword_Set(delete)
+	IF tf_noclutter && tf_delete THEN Message, 'DELETE and NOCLUTTER are mutually exclusive.'
+	
 	self.add_files      = Keyword_Set(add_files)
 	self.alert          = Keyword_Set(alert)
-	self.delete         = Keyword_Set(delete)
+	self.delete         = tf_delete
 	self.immediate      = N_Elements(immediate) eq 0 ? 1B : Keyword_Set(immediate)
+	self.noclutter      = tf_noclutter
 	self.traceback      = ~Keyword_Set(notraceback)
 	self.warn_traceback = Keyword_Set(warn_traceback)
-	
-	;
-	; Files are Opened in ::AddText only if SELF.LUN = 0.
-	;    This implies that the file identified by FILEID must already be open.
-	;
-	IF fileID NE 0 THEN self.lun = fileID
-
-
-	; No clutter desired?
-	IF Keyword_Set(noclutter) THEN BEGIN
-		self.alert     = 1
-		self.delete    = 1
-		self.noclutter = 1
-	 ENDIF
 
 	; Successful completion.
 	RETURN, 1
-
 END 
 
 
 ;+
 ;   Class definition
+;
+; :Fields:
+;       FIELNAME:       The error log filename.
+;       LUN:            The file logical unit number.
+;       ADD_FILES:      Add file names to the traceback report.
+;       ALERT:          A flag, if set, will give user alerts on errors.
+;       APPEND:         A flag, if set, text will be appended to existing file.
+;       TRACEBACK:      If set, will include traceback information into the log file.
+;       LASTMESSAGE:    The last message written into the file.
+;       IMMEDIATE:      A flag causing messages to flush to disk immediately
+;       DELETE:         A flag causing log file to be deleted when object is destroyed.
+;       NOCLUTTER:      A flag that sets up file deletion on destroy.
+;       STATUS:         The current status of the error logger. 0-waiting, 1-normal, 2-error.
+;       WARN_TRACEBACK: Add traceback report to the warning messages.
 ;
 ; :Params:
 ;       CLASS:          out, optional, type=structure
@@ -1021,6 +1124,7 @@ PRO MrLogFile__Define, class
 	          lun:            0L, $         ; The file logical unit number.
 	          add_files:      0B, $         ; Add file names to the traceback report.
 	          alert:          0B, $         ; A flag, if set, will give user alerts on errors.
+	          append:         0B, $         ; A flag, if set, text will be appended to existing file.
 	          traceback:      0B, $         ; If set, will include traceback information into the log file.
 	          lastMessage:    Ptr_New(), $  ; The last message written into the file.
 	          immediate:      0B, $         ; A flag causing messages to flush to disk immediately

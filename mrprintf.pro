@@ -64,10 +64,13 @@
 ;                   Allows the format of the output to be specified in precise detail,
 ;                       using a FORTRAN-style specification. If is not specified,
 ;                       IDL uses its default rules for formatting the output.
-;       LEVEL:      in, required, type=integer, default=4
+;       LEVEL:      in, optional, type=integer, default=4
 ;                   Level in the callstack at which to report the error. The default
 ;                       is to report to the program that calls MrPrintF. Used only with
 ;                       the 'logwarn' and 'logerr' options.
+;       STATUS:     in, optional, type=byte
+;                   The error status. Zero (0) indicates no error while 1-255 indicate
+;                       an error has occurred. Used only with `LUN`={ 'logerr' | 'logtext' | 'logwarn' }
 ;       _REF_EXTRA: in, optional, type=any
 ;                   Any keyword accepted by IDL's String() function.
 ;
@@ -90,10 +93,12 @@
 ;       2016/06/11  -   PrintF is disabled in demo mode, so use Print for LUN of -1
 ;                           or -2 (stderr/stdout). Issue error otherwise. - MRA
 ;       2016/10/06  -   Added the LEVEL keyword. - MRA
+;       2017/03/18  -   Added the STATUS keyword. - MRA
 ;-
 pro MrPrintF, lun,  arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
                    arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, $
 FORMAT=format, $
+STATUS=status, $
 LEVEL=level, $
 _REF_EXTRA=extra
 	compile_opt idl2
@@ -128,55 +133,55 @@ _REF_EXTRA=extra
 	
 	case nparams of
 		20: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		19: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		18: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		17: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, arg16, arg17, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, arg16, arg17, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		16: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, arg16, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, arg16, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		15: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, arg15, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, arg15, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		14: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, arg14, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, arg14, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		13: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, arg13, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, arg13, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		12: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, arg12, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, arg12, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		11: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 arg11, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  arg11, $
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		10: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, arg10, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 9: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8,  arg9, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 8: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7,  arg8, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 7: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6,  arg7, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 6: str = string( arg1,  arg2,  arg3,  arg4,  arg5,  arg6, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 5: str = string( arg1,  arg2,  arg3,  arg4,  arg5, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 4: str = string( arg1,  arg2,  arg3,  arg4, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 3: str = string( arg1,  arg2,  arg3, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 2: str = string( arg1,  arg2, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 1: str = string( arg1, $
-		                 FORMAT=format, _STRICT_EXTRA=extra )
+		                  FORMAT=format, _STRICT_EXTRA=extra )
 		 0: ;Do nothing for now.
 		else: message, 'Incorrect number of parameters.'
 	endcase
@@ -211,15 +216,15 @@ _REF_EXTRA=extra
 			'<stderr>': theLUN = MrStdErr()
 			'logerr': begin
 				oLog = MrStdLog()
-				oLog -> AddError, str, level
+				oLog -> AddError, str, LEVEL=level, STATUS=status
 			endcase
 			'logwarn': begin
 				oLog = MrStdLog()
-				oLog -> AddWarning, str, level
+				oLog -> AddWarning, str, LEVEL=level, STATUS=status
 			endcase
 			'logtext': begin
 				oLog = MrStdLog()
-				oLog -> AddText, str, /ADD_CALLER
+				oLog -> AddText, str, /ADD_CALLER, STATUS=status
 			endcase
 			else: message, 'Invalid value for LUN: "' + lun + '".'
 		endcase

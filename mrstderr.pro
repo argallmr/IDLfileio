@@ -48,6 +48,9 @@
 ;                       returned.
 ;
 ; :Keywords:
+;       APPEND:     in, optional, type=boolean, default=0
+;                   If set, `FILE` will be opened with the file pointer at the end of
+;                       the file. This keyword is used only if a file name is given.
 ;       KEEP_OPEN:  in, optional, type=boolean, default=0
 ;                   If set, opening a new standard error file will not cause the current
 ;                       one to be closed. The default is to close the previous file.
@@ -77,8 +80,10 @@
 ; :History:
 ;    Modification History::
 ;       2015/10/28  -   Written by Matthew Argall
+;       2017/03/18  -   Added the APPEND keyword. - MRA
 ;-
 function MrStdErr, file, $
+APPEND=append, $
 KEEP_OPEN=keep_open, $
 NAME=name
 	compile_opt idl2
@@ -127,7 +132,7 @@ NAME=name
 			stderr_id    = -2
 			stderr_fname = theFile
 		endif else begin
-			openw, stderr_id, theFile, /GET_LUN
+			openw, stderr_id, theFile, APPEND=append, /GET_LUN
 			stderr_fname = file_search(theFile, /FULLY_QUALIFY_PATH)
 		endelse
 

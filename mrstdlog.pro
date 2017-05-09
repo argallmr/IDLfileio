@@ -48,6 +48,9 @@
 ;                       returned.
 ;
 ; :Keywords:
+;       APPEND:     in, optional, type=boolean, default=0
+;                   If set, `FILE` will be opened with the file pointer at the end of
+;                       the file.
 ;       _REF_EXTRA: in, optional, type=any
 ;                   Any keyword accepted by MrLogFile::INIT.
 ;
@@ -72,8 +75,10 @@
 ; :History:
 ;    Modification History::
 ;       2015/10/29  -   Written by Matthew Argall
+;       2017/03/18  -   Added the APPEND keyword. - MRA
 ;-
 function MrStdLog, file, $
+APPEND=append, $
 _REF_EXTRA=extra
 	compile_opt idl2
 	on_error, 2
@@ -82,7 +87,7 @@ _REF_EXTRA=extra
 	common mrstdlog_comm, stdlog
 
 	;Does the fileID exist yet?
-	tf_exist  = n_elements(stdlog) gt 0 && obj_valid(stdlog)
+	tf_exist = n_elements(stdlog) gt 0 && obj_valid(stdlog)
 
 ;-----------------------------------------------------
 ; Return the Current File ID \\\\\\\\\\\\\\\\\\\\\\\\\
@@ -90,7 +95,7 @@ _REF_EXTRA=extra
 	if n_elements(file) eq 0 then begin
 		;Default to standard error
 		if ~tf_exist $
-			then stdlog = obj_new('MrLogFile', '', _STRICT_EXTRA=extra)
+			then stdlog = obj_new('MrLogFile', 'stderr', _STRICT_EXTRA=extra)
 
 ;-----------------------------------------------------
 ; Assign an Existing MrLogFile Object \\\\\\\\\\\\\\\\
@@ -112,7 +117,7 @@ _REF_EXTRA=extra
 	endif else if size(file, /TNAME) eq 'STRING' then begin
 		;If the error logging object already exists, change file names
 		if tf_exist then begin
-			status = stdlog -> Open(file)
+			status = stdlog -> Open(file, APPEND=append)
 			if status eq 0 then message, 'File cannot be opened: "' + file + '".'
 		
 			;Set properties
@@ -120,17 +125,21 @@ _REF_EXTRA=extra
 		
 		;Otherwise, create a new object
 		endif else begin
-			stdlog = obj_new('MrLogFile', file, _STRICT_EXTRA=extra)
+			stdlog = obj_new('MrLogFile', file, APPEND=append, _STRICT_EXTRA=extra)
 		endelse
 
 ;-----------------------------------------------------
-; Set ID by LUN \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+; Set ID by LUN \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 ;-----------------------------------------------------
 	endif else begin
 		;LUNs are allowed only in the INIT method.
 		if tf_exist then obj_destroy, stdlog
 		stdlog = obj_new('MrLogFile', file, _STRICT_EXTRA=extra)
 	endelse
+
+;-----------------------------------------------------
+; Finish Up \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+;-----------------------------------------------------
 	
 	;Return
 	return, stdlog
